@@ -2,3 +2,8 @@
 .Rhistory
 .RData
 .Ruserdata
+data/*.ods
+Rplots.pdf
+*.Rproj
+forpub.csv
+data/AgeDeathDemographics.csv
