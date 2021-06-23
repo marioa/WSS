@@ -2,10 +2,11 @@
 .Rhistory
 .RData
 .Ruserdata
-data/*.ods
+data/uk-data/*.ods
 Rplots.pdf
 *.Rproj
 forpub.csv
 data/AgeDeathDemographics.csv
 *.pdf
-data/*.json
+data/data.json
+.DS_Store
