@@ -9,5 +9,6 @@ forpub.csv
 data/AgeDeathDemographics.csv
 *.pdf
 data/data.json
-*.swp
-
+.DS_Store
+*.png
+data/uk-data
