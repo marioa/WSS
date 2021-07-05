@@ -13,3 +13,6 @@ data/data.json
 .DS_Store
 *.png
 data/uk-data
+Docker/output
+Docker/input-schema.json
+Docker/schema.json
