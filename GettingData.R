@@ -15,7 +15,7 @@ library(dplyr, warn.conflicts = FALSE, quietly = TRUE)
 library(tidyr, warn.conflicts = FALSE, quietly = TRUE)
 
 
-# Region lookup -----------------------------------------------------------
+# Region look-up -----------------------------------------------------------
 
 #
 # UK country codes available from:
@@ -117,10 +117,12 @@ region7Tocode  <- data.frame(
 
 # Download data -----------------------------------------------------------
 
-# Region to get data for
-subregion <- "East of England"
+# Region to get data for - eventually get this from the web-ui as a code.
+# Translate the 7 region code to the 9 region one if necessary.
+subregion <- "North East"
 
-# Get the 9 region codes to deal with the special cases
+# Get the 9 region codes to deal with the special cases of two regions that
+# need to be amalgamated.
 if (subregion == "Midlands"){
   code <-  c("E12000002", "E12000005")
 } else if (subregion == "North East"){
@@ -129,7 +131,11 @@ if (subregion == "Midlands"){
   code <- region9Tocode[subregion]
 }
 
-# Function to return one or more URLs to query the requested data.
+
+# getURL function ---------------------------------------------------------
+
+# Function to return one or more URLs to query for the requested data based
+# on the region codes.
 getURL <- function(code, query){
 
   # Set the url
@@ -158,30 +164,105 @@ getURL <- function(code, query){
   return(url)
 }
 
-# Get data
+
+# getData function --------------------------------------------------------
+
+# Get data from the URLs.
 getData <-  function(urls) {
 
+  # Data to be returned
   dat <- ""
+
+  # Flag to indicate if this is the first time over the loop
   first_time <-  TRUE
 
+  # Loop over the URLs
   for(url in urls){
-    d <- read_csv(url, show_col_types = FALSE)
+
+    # Get the data
+    d <- read_csv(url,
+                  progress = FALSE,
+                  show_col_types = FALSE)
+
     if (first_time) {
       dat <- d
       first_time <- FALSE
     } else {
-      dat <- dat + d
+
+      # Intersection of dates
+      start <- max(min(d$date), min(dat$date))
+      end   <- min(max(d$date), max(dat$date))
+
+      # Filter data by date
+      d1 <- d[start <= d$date & d$date <= end,]
+      d2 <- dat[start <= dat$date & dat$date <= end,]
+
+      # Area codes
+      d1areaCode <- unique(d1$areaCode)
+      d2areaCode <- unique(d2$areaCode)
+
+      # Check we have the smae number of rows
+      if(nrow(d1) != nrow(d2)){
+        stop("Data frames are not the of the same size.")
+      }
+
+      # North East = North East and Yorkshire = North East + Yorkshire and The Humber
+      #              E40000009                = E12000001 + E12000003
+      if ((d1areaCode == "E12000003" & d2areaCode == "E12000001") |
+          (d1areaCode == "E12000001" & d2areaCode == "E12000003")) {
+         areaCode <- "E40000009"
+         areaName <- "North East"
+      }
+
+      # Midlands  = East Midlands + West Midlands
+      # E40000008 =  E12000002 + E12000005
+      if ((d1areaCode == "E12000002" & d2areaCode == "E12000005") |
+          (d1areaCode == "E12000005" & d2areaCode == "E12000002")) {
+        areaCode <- "E40000008"
+        areaName <- "Midlands"
+      }
+      # Loop round the columns
+      # NOTE will not work for character based columns!
+      for (name in names(d1)) {
+        if(name == "areaCode" | name == "areaName"){
+          next # set these up later
+        } else if (name == "date") {
+          # Check dates match up
+          if(all(d1$date == d2$date)){
+            dat$date <- d1$date
+          } else {
+            stop("Not all dates match for ",d1$areaName," and ",d2$areaName,".")
+          }
+        } else if (name == "areaType") {
+          dat$areaType <- d1$areaType
+        } else if (is.numeric(d1[[name]]) & is.numeric(d2[[name]])) {
+          # Add columns together
+          dat[name] <- d1[name] + d2[name]
+        } else if (all(is.na(d1[[name]])) & all(is.na(d2[[name]]))){
+          dat[name] <- d1[name]
+          message("All values for ", name, " are NAs.")
+        } else if (is.character(d1[[name]]) & is.character(d2[[name]])) {
+          if(all(d1[[name]] == d2[[name]])){
+            dat[name] <- d1[name]
+          } else {
+            warning("The column ", name, " is a chacter vector but not all values are equal.")
+          }
+        } else {
+          warning("Do not know how to handle ", name, ".")
+        }
+      } # End for loop
+
+      # set values
+      dat$areaCode <-  areaCode
+      dat$areaName <- areaName
     }
   }
 
   return(dat)
 }
 
-# Are we dealing with an English subregion - start with E12
-isEngSubregion <-  grepl("^E12",code)
 
-# Base URL to get the UK government data
-baseurl <- "https://api.coronavirus.data.gov.uk/v2/data?"
+# Get the data ------------------------------------------------------------
 
 # Start and end date for the data
 # for the end date lose only the last day of data -
@@ -189,34 +270,18 @@ baseurl <- "https://api.coronavirus.data.gov.uk/v2/data?"
 startdate <- as.Date("2020/07/25")
 enddate <-  Sys.Date()-5
 
-if (!isEngSubregion) { # Dealing with a GB country state
-   header <- paste0("areaType=nation&","areaCode=",code,"&")
-} else { # Dealing with an English region
-   header <- paste0("areaType=region&","areaCode=",code,"&")
-}
+# Construct the query part of the URL not including the baseurl, the areaType
+# and the areaRegion as that is generated from the codes in the getURL function.
+query <- paste0("metric=newCasesBySpecimenDate&",
+                "metric=newDeaths28DaysByDeathDate&",
+                "metric=newPCRTestsByPublishDate&",
+                "metric=newPeopleVaccinatedFirstDoseByVaccinationDate&",
+                "format=csv")
 
-path <- paste0("metric=newCasesBySpecimenDate&",
-               "metric=newDeaths28DaysByDeathDate&",
-               "metric=newPCRTestsByPublishDate&",
-               "metric=newPeopleVaccinatedFirstDoseByVaccinationDate&",
-               "format=csv")
+# Get the URL(s)
+urls <- getURL(code, query)
 
-urls <- getURL(code, path)
+# Get the data.
 dat <- getData(urls)
 
-# Create URL for total cases, deaths, tests and vaccinations
-casesurl <- paste0(baseurl,
-                   header,
-                   "metric=newCasesBySpecimenDate&",
-                   "metric=newDeaths28DaysByDeathDate&",
-                   "metric=newPCRTestsByPublishDate&",
-                   "metric=newPeopleVaccinatedFirstDoseByVaccinationDate&",
-                   "format=csv")
 
-# Explicitly define the types for the columns
-coltypes <- cols(col_character(), col_character(),col_character(),
-                 col_date(format="%Y-%m-%d"), #col_integer(),
-                 col_integer(),  col_integer(), col_integer())
-
-# Read the cases, deaths and tests data
-comdat <-  read_csv(file = casesurl, col_types = coltypes)
