@@ -130,8 +130,9 @@ Knock<-t(data.frame(
 baseurl <- "https://api.coronavirus.data.gov.uk/v2/data?"
 
 # Start and end date - the data to collect data from
-startdate <- as.Date("2020/09/22") #as.Date("2020/02/25")
+startdate <- as.Date("2020/08/25") #as.Date("2020/02/25")
 # Lose only the last day of data - use tail correction for reporting delay
+# Weekend data can be sketchy Extend the enddate if run on Monday moring
 enddate <-  Sys.Date()-5
 # Set the generation time
 genTime <- 5
@@ -379,7 +380,6 @@ NIdat <- NIdat %>%  select(date,
            date <= enddate ) %>%
   arrange(date)
 
-rm(walesurl,scoturl,NIurl)
 
 # Regional data for deaths and cases by specimen date
 regurl <- paste0(baseurl,
@@ -444,9 +444,9 @@ regagedat <- regagedat %>%  select(date, areaName, age, cases) %>%
            date <= enddate ) %>%
   arrange(date)
 
-# Read in the UK government R estimate data from a csv file
+# Define the columns for the UK government R estimate data from a csv file
 coltypes <- cols(
-  Date = col_date(format = "%Y-%m-%d"), UK_LowerBound = col_number(),
+  Date = col_date(format = "%d/%m/%Y"), UK_LowerBound = col_number(),
   UK_UpperBound = col_number(), England_LowerBound = col_number(),
   England_UpperBound = col_number(), EEng_LowerBound = col_number(),
   EEng_UpperBound = col_number(), Lon_LowerBound = col_number(),
@@ -457,7 +457,12 @@ coltypes <- cols(
   SE_UpperBound = col_number(), SW_LowerBound = col_number(),
   SW_UpperBound = col_number()
 )
+
+# Read in the data
 Rest <- read_csv(file="data/R_estimate.csv", col_types = coltypes)
+
+# Change date format to %d/%m/%Y
+Rest$Date <- format(Rest$Date,"%d/%m/%Y")
 
 # Read in Scottish R value estimates
 # coltypes <- cols(
@@ -511,7 +516,8 @@ scotdailycases = read_csv(dailycasesurl, col_types = coltypes)
 scotdailycases %>% select(date=Date,board=HBName, cases=DailyPositive)  %>%
   pivot_wider(names_from = board, values_from = cases) %>%
   filter(date >= startdate & date <= enddate )         %>%
-  arrange(date) -> scotdailycasesbyboard # Join the scotdailycases with regcases by date
+  arrange(date) -> scotdailycasesbyboard
+# Join the scotdailycases with regcases by date
 regcases <- inner_join(regcases,scotdailycasesbyboard, by = c("date"="date"))
 
 #### Get tests for England pre-Sept by taking the post-Sept fraction of all tests that were in England (0.867), and set vaccines to zero
@@ -549,8 +555,9 @@ HospitalData  <-  HospitalData %>% filter(date >= startdate &
   arrange(date)
 
 
-# Remove the no longer needed input data
-rm(ukcasedat,scotdailycases,scotdailycasesbyboard,d,HospitalUrl,deathurl,casesurl)
+
+# Remove the no longer needed input datas
+rm(ukcasedat,scotdailycases,scotdailycasesbyboard,d,HospitalUrl,deathurl,casesurl,scoturl,walesurl,NIurl)
 
 # Plot all cases against date: Used for the paper, uncomment to recreate
 #comdat %>% ggplot(aes(x=date,y=allCases)) + geom_line() +
@@ -683,7 +690,8 @@ xcastage$'75+' <-casedat$`75_79`+casedat$`80_84`+casedat$`85_89`+casedat$`90+`
 #  Combination required to go from 9 to 7 English regions
 regcases$NE_Yorks<-regcases$`North East`+regcases$`Yorkshire and The Humber`
 regcases$Midlands<-regcases$`East Midlands`+regcases$`West Midlands`
-
+# Reorder regcases
+regcases<-regcases[,c(1,2,3,4,5,6,7,9,10,8,23,26,27,11,12,13,14,15,16,17,18,19,20,21,22,24,25,28,29)]
 # Set false positive adjustment at 0.004, extrapolate tests if the last few days are missing
 comdat$fpCases <- comdat$allCases-0.004*as.integer(comdat$tests)
 
@@ -877,9 +885,9 @@ pStoD <- pStoD - pStoC*(pCtoD+(1-pCtoD)*pCRtoD)
   SARI[iday,agerange]=SARI[iday,agerange]+newSARI[iday,agerange]-oldSARI[iday,agerange]+SARI[(iday-1),agerange]
   CRIT[iday,agerange]=CRIT[iday,agerange]+newCRIT[iday,agerange]-oldCRIT[iday,agerange]+CRIT[(iday-1),agerange]
   CRITREC[iday,agerange]=CRITREC[iday,agerange]+newCRITREC[iday,agerange]-oldCRITREC[iday,agerange]+CRITREC[(iday-1),agerange]
-
 }
-}# End of compartment section
+}
+# End of compartment section
 
 # Monitoring plots
 if(interactive()){
@@ -892,15 +900,18 @@ if(interactive()){
   plot(HospitalData$hospitalCases)
   lines(rowSums(SARI[2:20]+CRIT[2:20]+CRITREC[2:20]))
 }
+#  Smoothcasedat
+
+smoothcases=smooth.spline(comdat$fpCases, df=20)
 
 # Create a vector to hold the results for various R-numbers
 ninit <- as.numeric(1:nrow(comdat))/as.numeric(1:nrow(comdat))
 dfR <- data.frame(x=1.0:length(comdat$date),
-  date=comdat$date, gjaR=ninit, rawR=ninit,  fpR=ninit,  weeklyR=ninit,  bylogR=ninit,
-  p00=ninit,  p05=ninit,  p10=ninit,  p15=ninit,  p20=ninit,  p25=ninit,  p30=ninit,
-  p35=ninit,  p40=ninit,  p45=ninit,  p50=ninit,  p55=ninit,  p60=ninit,  p65=ninit,
-  p70=ninit,  p75=ninit,  p80=ninit,  p85=ninit,  p90=ninit, x05=ninit, x15=ninit,
-  x25=ninit, x45=ninit, x65=ninit, x75=ninit)
+                  date=comdat$date, gjaR=ninit, rawR=ninit,  fpR=ninit,  weeklyR=ninit,  bylogR=ninit,
+                  p00=ninit,  p05=ninit,  p10=ninit,  p15=ninit,  p20=ninit,  p25=ninit,  p30=ninit,
+                  p35=ninit,  p40=ninit,  p45=ninit,  p50=ninit,  p55=ninit,  p60=ninit,  p65=ninit,
+                  p70=ninit,  p75=ninit,  p80=ninit,  p85=ninit,  p90=ninit, x05=ninit, x15=ninit,
+                  x25=ninit, x45=ninit, x65=ninit, x75=ninit, smoothcasesR=ninit)
 # df#Ito: gjaR[i]<-(1+(comdat$allCases[i]-comdat$allCases[i-1])*2*genTime/(comdat$allCases[i]+comdat$allCases[i-1]))
 #  #Stratanovitch calculus
 # rawR averages cases over previous genTime days - assumes genTime is the same as infectious period
@@ -923,12 +934,12 @@ rat[is.na(rat)] <- 1.0
 rat[rat==Inf] <- 1.0
 rat[rat==-Inf] <- 1.0
 
-startplot <- rat$date[200]
+startplot <- rat$date[1]
 endplot <- enddate
 
 
 if(interactive()){
-  plot(smooth.spline(rat$Scotland[startplot <= rat$date & rat$date <= endplot],df=20)$y,
+  plot(smooth.spline(rat$Scotland[startplot <= rat$date & rat$date <= endplot],df=14)$y,
        x=rat$date[startplot <= rat$date & rat$date <= endplot],
        ylim=c(0.7,1.40),xlab="Date",ylab="R, Scotland")
 
@@ -937,11 +948,11 @@ if(interactive()){
     ggplot(aes(x=date, y=R, colour=Region)) + coord_cartesian(ylim=c(0.8,1.5)) +
     geom_smooth(formula= y ~ x, method = "loess", span=0.6) +  guides(color = "none") +
     facet_wrap(vars(Region))
-
-  rat %>% filter(startplot < date & date < endplot) %>%
+#  Plot UK nations and English regions
+  rat[,c(1,2,3,4,5,6,7,8,9,10,11,12,13)]%>% filter(startplot < date & date < endplot) %>%
     pivot_longer(!date,names_to = "Region", values_to="R") %>%
     ggplot(aes(x=date, y=R, colour=Region)) +
-    coord_cartesian(ylim=c(0.5,1.9))+ geom_smooth(formula= y ~ x, method = "loess", span=0.5) +
+    coord_cartesian(ylim=c(0.5,1.9))+ geom_smooth(formula= y ~ x, method = "loess", span=0.3) +
     guides(color = "none") + facet_wrap(vars(Region))
 
 }
@@ -979,8 +990,11 @@ for(i in ((genTime+1):length(dfR$gjaR))    ){
    dfR$x45[i]=1+log(xcastage$`45_64`[i]/xcastage$`45_64`[i-1])*genTime
    dfR$x65[i]=1+log(xcastage$`65_74`[i]/xcastage$`65_74`[i-1])*genTime
    dfR$x75[i]=1+log(xcastage$'75+'[i]/xcastage$'75+'[i-1])*genTime
-    }
+   dfR$smoothcasesR[i]=1+log(smoothcases$y[i]/smoothcases$y[i-1])*genTime
+}
 
+dfR$smoothR<-smooth.spline(dfR$bylogR,df=20)$y
+dfR$loessR<-predict(loess(bylogR~x,data=dfR,span=0.25))
 dfR[is.na(dfR)]=1.0
 dfR[dfR==Inf]=1.0
 dfR[dfR==-Inf]=1.0
@@ -1028,7 +1042,7 @@ smoothweightRfp$date<-dfR$date
 
 
 
-smoothR<-smooth.spline(dfR$bylogR,df=14)
+
 smoothR1<-smooth.spline(dfR$bylogR[1:(lock1-1)],df=lock1/14)
 smoothR1$date<-dfR$date[1:lock1-1]
 smoothR2<-smooth.spline(dfR$bylogR[lock1:(unlock1-1)],df=(unlock1-lock1)/14)
@@ -1064,8 +1078,6 @@ plot(dfR$piecewise,x=smoothweightR$date,ylab="R-number",xlab="",title("England")
 lines(y=Rest$England_LowerBound,x=Rest$Date-sagedelay)
 lines(y=Rest$England_UpperBound,x=Rest$Date-sagedelay)
 lines(smoothweightR$y,col="blue",lwd=2,x=dfR$date)
-#lines(predict(loess(gjaR ~ x, data=dfR,span=0.1)),col='red',x=dfR$date)
-#lines(predict(loess(gjaR ~ x, data=dfR,span=0.2)),col='red',x=dfR$date)
 lines(predict(loess(gjaR ~ x, data=dfR,span=0.3,weight=sqrt(comdat$allCases))),col='green',x=dfR$date,lwd=2)
 lines(predict(loess(gjaR ~ x, data=dfR,span=0.3)),col='green',x=dfR$date)
 lines(predict(loess(bylogR ~ x, data=dfR,span=0.3,weight=sqrt(comdat$allCases))),col='red',x=dfR$date,lwd=2)
@@ -1189,7 +1201,7 @@ filteredR <-append(
   append(tail(predict(loess(tmp ~ as.numeric(date), data=rat,span=s3))),
          tail(predict(loess(tmp ~ as.numeric(date), data=rat,span=s4))))
 )
-
+rm(rat$tmp)
 R_Wales_BestGuess <-mean(filteredR)
 R_Wales_Quant <-unname(quantile(filteredR, probs=c(0.05,0.25,0.5,0.75,0.95)))
 
@@ -1413,59 +1425,58 @@ if(interactive()){
 
 # Reverse Engineer cases from R-number - requires stratonovich calculus to get reversibility
 # Initializations
-#rm(PredictCases,PredictCasesSmoothR)
+rm(Predict)
 
 #  Use the same weekend-adjusted initial condition, regardless of smoothing effect
 #  Start with the "correct" data
 
-PredictCases<-comdat$allCases
-PredictCasesLin<-comdat$allCases
-PredictCasesRaw<-PredictCases
-PredictCasesSmoothR<-PredictCases
-PredictCasesdenoiseR<-PredictCases
-PredictCasesMeanR<- PredictCases
-PredictCasesLoessR<- PredictCases
-dfR$smoothR<-smooth.spline(dfR$bylogR,df=spdf)$y
-dfR$loessR<-predict(loess(bylogR ~ x, data=dfR,span=lospan))
+Predict <- data.frame(x=1.0:length(comdat$date),
+                      date=comdat$date,
+                      c=comdat$allCases,
+Lin=comdat$allCases,
+Raw=comdat$allCases,
+SmoothR=comdat$allCases,
+MeanR=comdat$allCases,
+smoothcasesR=comdat$allCases
+)
 meanR=mean(dfR$rawR)
-
-
-for(i in (genTime+22):length(dfR$gjaR)){
-  PredictCases[i]=PredictCases[i-1]*exp((dfR$bylogR[i]-1)/genTime)
-  PredictCasesLin[i]=PredictCasesLin[i-1]*(1.0+(dfR$gjaR[i]-1)/genTime)
-  PredictCasesRaw[i]=PredictCasesRaw[i-1]*(1.0+(dfR$rawR[i]-1)/genTime)
-  PredictCasesMeanR[i]=PredictCasesMeanR[i-1]*(1.0+(meanR-1)/genTime)
-  PredictCasesSmoothR[i]=PredictCasesSmoothR[i-1]*exp((dfR$smoothR[i]-1)/genTime)
-  PredictCasesLoessR[i]=PredictCasesLoessR[i-1]*exp((dfR$loessR[i]-1)/genTime)
-  }
-denoise=sum(PredictCasesLoessR)/sum(comdat$allCases)
+startpred=genTime+30
+for(i in 8:length(dfR$gjaR)){
+  Predict$c[i]=Predict$c[i-1]*exp((dfR$bylogR[i-1]-1)/genTime)
+  Predict$Lin[i]=Predict$Lin[i-1]*(1.0+(dfR$gjaR[i-1]-1)/genTime)
+  Predict$Raw[i]=Predict$Raw[i-1]*(1.0+(dfR$rawR[i-1]-1)/genTime)
+  Predict$MeanR[i]=Predict$MeanR[i-1]*(1.0+(meanR-1)/genTime)
+  Predict$SmoothR[i]=Predict$SmoothR[i-1]*exp((dfR$smoothR[i-1]-1)/genTime)
+  Predict$smoothcasesR[i]=Predict$smoothcasesR[i-1]*exp((dfR$smoothcasesR[i-1]-1)/genTime)
+    }
 #  Averaging R is not the same as averaging e^R
 #  Noise suppresses the growth rate in the model, Smoothed R grows too fast
 #   Multiplier chosen to match final cases, because it is super-sensitive to noise in the initial day
 #
 
-PredictCasesLoessR=PredictCasesLoessR*sum(comdat$allCases)/sum(PredictCasesLoessR)
-PredictCasesSmoothR=PredictCasesSmoothR*sum(comdat$allCases)/sum(PredictCasesSmoothR)
-PredictCasesMeanR=PredictCasesMeanR*sum(comdat$allCases)/sum(PredictCasesMeanR)
-
-
-
-plot(comdat$allCases,x=comdat$date,xlab="Date",ylab="Cases backdeduced from R")
-lines(PredictCases,x=comdat$date, col="red")
-lines(PredictCasesSmoothR,x=dfR$date, col="blue",lwd=2)
-lines(PredictCasesMeanR,x=comdat$date, col="green",lwd=2)
-lines(PredictCasesLoessR,x=comdat$date, col="violet",lwd=2)
+Predict$smoothcasesR =Predict$smoothcasesR*sum(comdat$allCases)/sum(Predict$SmoothR)
+Predict$SmoothR=Predict$SmoothR*sum(comdat$allCases)/sum(Predict$SmoothR)
+Predict$MeanR=Predict$MeanR*sum(comdat$allCases)/sum(Predict$SmoothR)
+sum(Predict$MeanR)
+sum(Predict$SmoothR)
+sum(Predict$smoothcasesR)
+plot(comdat$allCases,x=Predict$date,xlab="Date",ylab="Cases backdeduced from R"
+     ,xlim=c(Predict$date[(startpred)],Predict$date[350]))
+lines(Predict$c,x=Predict$date, col="black")
+lines(Predict$SmoothR,x=Predict$date, col="blue",lwd=2)
+lines(Predict$MeanR,x=Predict$date, col="green",lwd=2)
+lines(Predict$smoothcasesR,x=Predict$date, col="red",lwd=2)
 
 # ggplot version of the same graph
-tmpdat <- tibble(date=comdat$date,PredictCases=PredictCases,
-                 PredictCasesLoessR=PredictCasesLoessR,
-                 PredictCasesSmoothR=PredictCasesSmoothR,
-                 PredictCasesMeanR=PredictCasesMeanR)
+tmpdat <- tibble(date=comdat$date,c=Predict$c,
+                 smoothcasesR=Predict$smoothcasesR,
+                 SmoothR=Predict$SmoothR,
+                 MeanR=Predict$MeanR)
 ggplot(comdat,aes(x=date)) + geom_point(aes(y=allCases),alpha=0.5) +
-  geom_line(data=tmpdat, aes(x=date,y=PredictCases),colour="red",alpha=0.75) +
-  geom_line(data=tmpdat, aes(x=date,y=PredictCasesSmoothR),colour="blue",alpha=0.75) +
-  geom_line(data=tmpdat, aes(x=date,y=PredictCasesMeanR),colour="green",alpha=0.75) +
-  geom_line(data=tmpdat, aes(x=date,y=PredictCasesLoessR),colour="violet",alpha=0.75) +
+  geom_line(data=tmpdat, aes(x=date,y=c),colour="black",alpha=0.75) +
+  geom_line(data=tmpdat, aes(x=date,y=SmoothR),colour="blue",alpha=0.75) +
+  geom_line(data=tmpdat, aes(x=date,y=MeanR),colour="green",alpha=0.75) +
+  geom_line(data=tmpdat, aes(x=date,y=smoothcasesR),colour="red",alpha=0.75) +
   xlab("Date") + ylab("Cases backdeduced from R")
 rm(tmpdat)
 
@@ -1620,28 +1631,6 @@ if(medrxiv){
       reggampredict[day,area] = sum(regcases[(day-27):day,area] * rev(gamdist))}}
   rm(day,area)
 
-
-  #  Regional plots, with CFR input by hand  - obsolete.  Serves only to show how bad it is to exclude age and vaccine data
-  #plot(regdeaths$London*55,x=regdeaths$date)
-  #lines(reglnpredict$London,x=reglnpredict$date)
-  #lines(reggampredict$London,x=reglnpredict$date)
-
-  #plot(regdeaths$`North East`*55,x=regdeaths$date)
-  #lines(reglnpredict$`North East`,x=reglnpredict$date)
-  #plot(regdeaths$`North West`*55,x=regdeaths$date)
-  #lines(y=reglnpredict$`North West`,x=reglnpredict$date)
-  #plot(regdeaths$`South West`*55,x=regdeaths$date)
-  #lines(reglnpredict$`South West`,x=reglnpredict$date)
-  #plot(regdeaths$`South East`*55,x=regdeaths$date)
-  #lines(reglnpredict$`South East`,x=reglnpredict$date)
-  #plot(regdeaths$`East Midlands`*55,x=regdeaths$date)
-  #lines(reglnpredict$`East Midlands` ,x=reglnpredict$date)
-  #plot(regdeaths$`East of England`*55,x=regdeaths$date)
-  #lines(reglnpredict$`East of England`,x=reglnpredict$date)
-  #plot(regdeaths$`West Midlands`*55,x=regdeaths$date)
-  #lines(reglnpredict$`West Midlands`,x=reglnpredict$date)
-  #plot(regdeaths$`Yorkshire and The Humber`*55,x=regdeaths$date)
-  #lines(reglnpredict$`Yorkshire and The Humber`,x=reglnpredict$date)
 
   for (area in 2:length(regcases)){
     lines(reglnpredict[2:279,area])}
@@ -1901,17 +1890,17 @@ for (iday in ((lengthofdata+1):(lengthofdata+predtime))){
 #Monitoring plots
 plot(HospitalData$newAdmissions)
 lines(rowSums(newSARI[2:20]),col="blue")
-plot(HospitalData$hospitalCases)
-lines(rowSums(SARI[2:20]+CRIT[2:20]+CRITREC[2:20]))
-plot(rowSums(CASE[2:20]))
-lines(rowSums(newMILD[2:20]+newILI[2:20]),col="red")
+plot(HospitalData$hospitalCases,x=HospitalData$date,ylab="Hospital Cases",xlab="Date")
+lines(rowSums(SARI[2:20]+CRIT[2:20]+CRITREC[2:20]),x=SARI$date,col='red')
+plot(rowSums(CASE[2:20]),x=deathdat$date,ylab="Cases",xlab="Date")
+lines(rowSums(newMILD[2:20]+newILI[2:20]),col="red",x=newMILD$date)
 
-plot(HospitalData$covidOccupiedMVBeds)
-lines(rowSums(CRIT[2:20]),col="blue")
-plot(rowSums(deathdat[16:20]),x=deathdat$date)
+plot(HospitalData$covidOccupiedMVBeds,x=deathdat$date,ylab="ICU Occupation",xlab="Date")
+lines(rowSums(CRIT[2:20]),col="blue",x=CRIT$date)
+plot(rowSums(deathdat[16:20]),x=deathdat$date,ylab="Deaths",xlab="Date")
 lines(rowSums(DEATH[16:20]),col="blue",x=DEATH$date)
 
-# This needs to be the last routine called for the UI, by default it returns
+len# This needs to be the last routine called for the UI, by default it returns
 # success (0), if there is no success setStatus() should be called. By default
 # it will return -1 but you can set a value setStatus(1). Any non-zero value
 # will indicate a problem.  For interactive work "quit" can end Rstudio session altogether
