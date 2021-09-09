@@ -33,7 +33,7 @@ setwd(".")
 options(scipen = 999)
 
 # Copy transition rates from covidsim.  There are three different functions for
-# ICDFs (Inverse Cumulative Distribution Function), no idea why.  x-axis divided into 20 blocks of 5%.
+# ICDFs (Inverse Cumulative Distribution Function).  x-axis divided into 20 blocks of 5%.
 # Will need to invert this.  Recent versions include a "Stepdown" state which seems to entail dying in CRITREC
 #  https://www.imperial.ac.uk/mrc-global-infectious-disease-analysis/covid-19/report-41-rtm/
 # PropSARI taken from Knock et al to increase smoothly with age
@@ -129,7 +129,7 @@ Knock<-t(data.frame(
 # Base URL to get the UK government data
 baseurl <- "https://api.coronavirus.data.gov.uk/v2/data?"
 
-# Start and end date - the data to collect data from
+# Start and end date - the date to collect data from
 startdate <- as.Date("2020/08/25") #as.Date("2020/08/25")
 
 # Lose only the last day of data - use tail correction for reporting delay
@@ -567,7 +567,7 @@ HospitalData  <-  HospitalData %>% filter(date >= startdate &
 
 
 # Remove the no longer needed input datas
-rm(ukcasedat,scotdailycases,scotdailycasesbyboard,d)
+rm(ukcasedat,scotdailycases,scotdailycasesbyboard,d,coltypes)
 rm(HospitalUrl,deathurl,casesurl,scoturl,walesurl,NIurl,ageurl,baseurl,regurl,regurl2,ukcaseurl,vacurl)
 
 # Plot all cases against date: Used for the paper, uncomment to recreate
@@ -921,9 +921,9 @@ if(interactive()){
   plot(HospitalData$hospitalCases)
   lines(rowSums(SARI[2:20]+CRIT[2:20]+CRITREC[2:20]))
 }
-#  Smoothcasedat
 
-smoothcases=smooth.spline(comdat$fpCases, df=20)
+#  Smoothcasedat
+smoothcases=smooth.spline(comdat$allCases, df=20)
 
 # Create a vector to hold the results for various R-numbers
 ninit <- as.numeric(1:nrow(comdat))/as.numeric(1:nrow(comdat))
@@ -1105,15 +1105,28 @@ plot(smoothweightR$y,ylab="Regional R-number",xlab="Date",x=dfR$date)
 for (i in 8:17){
   lines(smooth.spline(na.omit(dfR[i]),df=12)$y,col=i,x=dfR$date[!is.na(dfR[i])])
 }
+
+plot(dfR$bylogR,x=smoothweightR$date,ylab="R-number",xlab="",
+     title("R, England"),ylim=c(0.6,1.6),xlim=plotdate,cex.lab=1.6, cex.axis=1.6, cex.main=1.6, cex.sub=1.6)
+lines(Rest$England_LowerBound,x=Rest$Date-sagedelay,lwd=2)
+lines(y=Rest$England_UpperBound,x=Rest$Date-sagedelay,lwd=2)
+lines(dfR$piecewise,col="violet",lwd=3,x=dfR$date)
+lines(smoothweightR$y,col="blue",lwd=3,x=dfR$date)
+lines(predict(loess(itoR ~ x, data=dfR,span=0.3,weight=sqrt(comdat$allCases))),col='green',x=dfR$date,lwd=3)
+#lines(predict(loess(itoR ~ x, data=dfR,span=0.3)),col='green',x=dfR$date)
+lines(predict(loess(bylogR ~ x, data=dfR,span=0.3,weight=sqrt(comdat$allCases))),col='red',x=dfR$date,lwd=3)
+#lines(predict(loess(bylogR ~ x, data=dfR,span=0.3)),col='red',x=dfR$date)
+
 plot(dfR$piecewise,x=smoothweightR$date,ylab="R-number",xlab="",
-     title("R, England"),ylim=c(0.6,1.4),xlim=plotdate,cex.lab=1.6, cex.axis=1.6, cex.main=1.6, cex.sub=1.6)
+     title("R, England"),ylim=c(0.6,1.4),xlim=plotdate,cex.lab=1.5, cex.axis=1.5, cex.main=1.5, cex.sub=1.6)
 lines(Rest$England_LowerBound,x=(Rest$Date-sagedelay))
 lines(y=Rest$England_UpperBound,x=Rest$Date-sagedelay)
-lines(smoothweightR$y,col="blue",lwd=2,x=dfR$date)
-lines(predict(loess(itoR ~ x, data=dfR,span=0.3,weight=sqrt(comdat$allCases))),col='green',x=dfR$date,lwd=2)
-#lines(predict(loess(itoR ~ x, data=dfR,span=0.3)),col='green',x=dfR$date)
-lines(predict(loess(bylogR ~ x, data=dfR,span=0.3,weight=sqrt(comdat$allCases))),col='red',x=dfR$date,lwd=2)
-#lines(predict(loess(bylogR ~ x, data=dfR,span=0.3)),col='red',x=dfR$date)
+lines(predict(loess(bylogR ~ x, data=dfR,span=0.05,weight=sqrt(comdat$allCases))),col='red',x=dfR$date,lwd=2)
+lines(predict(loess(bylogR ~ x, data=dfR,span=0.1,weight=sqrt(comdat$allCases))),col='green',x=dfR$date,lwd=2)
+lines(predict(loess(bylogR ~ x, data=dfR,span=0.2,weight=sqrt(comdat$allCases))),col='blue',x=dfR$date,lwd=2)
+lines(predict(loess(bylogR ~ x, data=dfR,span=0.3,weight=sqrt(comdat$allCases))),col='violet',x=dfR$date,lwd=3)
+
+
 ### Smoothing Filters
 s1=0.05
 s2=0.1
@@ -1255,10 +1268,8 @@ filteredR <-append(
 R_NI_BestGuess <-mean(filteredR)
 R_NI_Quant <-unname(quantile(filteredR, probs=c(0.05,0.25,0.5,0.75,0.95)))
 
-
-
-#  Delete tmp
-rat[,-length(rat)]
+#  Delete the tmp column
+rat <- rat[,-which(names(rat)=="tmp")]
 
 
 ##########   Age groups  ########
@@ -1346,7 +1357,17 @@ for (ismooth in 4:30){
 # Plot Regional R data vs Government  spdf is spline smoothing factor, lospan for loess
 
 #  various options to silence pdf writing
-pdfpo=TRUE
+pdfpo=FALSE
+
+#  Plot age data
+dfR[,c(2,9:27)]%>% filter(startplot < date & date < endplot) %>%
+  pivot_longer(!date,names_to = "Age", values_to="R") %>%
+  ggplot(aes(x=date, y=R, colour=Age)) +
+  coord_cartesian(ylim=c(0.5,1.9))+ geom_smooth(formula= y ~ x, method = "loess", span=0.3) +
+  guides(color = "none") + facet_wrap(vars(Age)) +
+  theme(axis.text.x=element_text(angle=90,hjust=1)) +xlab("Date")
+
+
 
 if(pdfpo){
 
@@ -1465,7 +1486,7 @@ if(interactive()){
 
 # Reverse Engineer cases from R-number - requires stratonovich calculus to get reversibility
 # Initializations
-rm(Predict)
+
 #  Use the same weekend-adjusted initial condition, regardless of smoothing effect
 #  Start with the "correct" data
 
@@ -1481,43 +1502,55 @@ MeanR=comdat$allCases,
 smoothcasesR=comdat$allCases
 )
 meanR=mean(dfR$stratR)
-startpred=genTime+19
-for(i in 8:length(dfR$date)){
-  Predict$c[i]=Predict$c[i-1]*exp((dfR$bylogR[i-1]-1)/genTime)
-  Predict$Lin[i]=Predict$Lin[i-1]*(1.0+(dfR$itoR[i-1]-1)/genTime)
-  Predict$SmoothRstrat[i]=Predict$SmoothRstrat[i-1]*(1.0+(dfR$stratR[i-1]-1)/genTime)
+startpred=genTime+22
+for(i in startpred:length(dfR$date)){
+  Predict$c[i]=Predict$c[i-1]*exp((dfR$bylogR[i]-1)/genTime)
+  Predict$Lin[i]=Predict$Lin[i-1]*(1.0+(dfR$itoR[i]-1)/genTime)
+  Predict$SmoothRstrat[i]=Predict$SmoothRstrat[i-1]*(1.0+(dfR$stratR[i]-1)/genTime)
   Predict$MeanR[i]=Predict$MeanR[i-1]*(1.0+(meanR-1)/genTime)
-  Predict$SmoothRlog[i]=Predict$SmoothRlog[i-1]*exp((dfR$smoothRlog[i-1]-1)/genTime)
-  Predict$SmoothRito[i]=Predict$SmoothRito[i-1]*exp((dfR$smoothRito[i-1]-1)/genTime)
-  Predict$smoothcasesR[i]=Predict$smoothcasesR[i-1]*exp((dfR$smoothcasesR[i-1]-1)/genTime)
+  Predict$SmoothRlog[i]=Predict$SmoothRlog[i-1]*exp((dfR$smoothRlog[i]-1)/genTime)
+  Predict$SmoothRito[i]=Predict$SmoothRito[i-1]*exp((dfR$smoothRito[i]-1)/genTime)
+  Predict$smoothcasesR[i]=Predict$smoothcasesR[i-1]*exp((dfR$smoothcasesR[i]-1)/genTime)
     }
 #  Averaging R is not the same as averaging e^R
 #  Noise suppresses the growth rate in the model, Smoothed R grows too fast
 #   Multiplier chosen to match final cases, because it is super-sensitive to noise in the initial day
 #
 
-Predict$smoothcasesR =Predict$smoothcasesR*sum(comdat$allCases)/sum(Predict$SmoothRlog)
-Predict$SmoothRito =Predict$SmoothRito*sum(comdat$allCases)/sum(Predict$SmoothRlog)
+Predict$smoothcasesR =Predict$smoothcasesR*sum(comdat$allCases)/sum(Predict$smoothcasesR)
+Predict$SmoothRito =Predict$SmoothRito*sum(comdat$allCases)/sum(Predict$SmoothRito)
 Predict$SmoothRlog=Predict$SmoothRlog*sum(comdat$allCases)/sum(Predict$SmoothRlog)
-Predict$MeanR=Predict$MeanR*sum(comdat$allCases)/sum(Predict$SmoothRlog)
-sum(Predict$MeanR)
-sum(Predict$SmoothRlog)
-sum(Predict$SmoothRito)
-sum(Predict$smoothcasesR)
+Predict$MeanR=Predict$MeanR*sum(comdat$allCases)/sum(Predict$MeanR)
+
+if(interactive()){
+  sum(Predict$MeanR)
+  sum(Predict$SmoothRlog)
+  sum(Predict$SmoothRito)
+  sum(Predict$smoothcasesR)
+}
+
 plot(comdat$allCases,x=Predict$date,xlab="Date",ylab="Cases backdeduced from R"
-     ,xlim=c(Predict$date[(startpred)],Predict$date[350]))
-lines(Predict$c,x=Predict$date, col="black")
+     ,xlim=c(Predict$date[(startpred+10)],Predict$date[350]))
+lines(Predict$c,x=Predict$date, col="black",lwd=2)
 lines(Predict$SmoothRlog,x=Predict$date, col="blue",lwd=2)
 lines(Predict$SmoothRito,x=Predict$date, col="violet",lwd=2)
 lines(Predict$MeanR,x=Predict$date, col="green",lwd=2)
 lines(Predict$smoothcasesR,x=Predict$date, col="red",lwd=2)
 
+dfR$meanR=meanR
+plot(dfR$bylogR,x=dfR$date,xlab="",ylab="R"
+     ,xlim=c(dfR$date[(startpred)],dfR$date[350]),ylim=c(-1,3))
+lines(dfR$smoothRlog,x=dfR$date, col="blue",lwd=2)
+lines(dfR$smoothRito,x=dfR$date, col="violet",lwd=2)
+lines(dfR$meanR,x=dfR$date, col="green",lwd=2)
+lines(dfR$smoothcasesR,x=dfR$date, col="red",lwd=2)
+
 # ggplot version of the same graph
-tmpdat <- tibble(date=comdat$date,c=Predict$c,
-                 smoothcasesR=Predict$smoothcasesR,
-                 SmoothRlog=Predict$SmoothRlog,
-                 SmoothRito=Predict$SmoothRito,
-                 MeanR=Predict$MeanR)
+tibble(date=comdat$date,c=Predict$c,
+       smoothcasesR=Predict$smoothcasesR,
+       SmoothRlog=Predict$SmoothRlog,
+       SmoothRito=Predict$SmoothRito,
+       MeanR=Predict$MeanR) ->tmpdat
 ggplot(comdat,aes(x=date)) + geom_point(aes(y=allCases),alpha=0.5) +
   geom_line(data=tmpdat, aes(x=date,y=c),colour="black",alpha=0.75) +
   geom_line(data=tmpdat, aes(x=date,y=SmoothRlog),colour="blue",alpha=0.75) +
@@ -1525,6 +1558,20 @@ ggplot(comdat,aes(x=date)) + geom_point(aes(y=allCases),alpha=0.5) +
   geom_line(data=tmpdat, aes(x=date,y=MeanR),colour="green",alpha=0.75) +
   geom_line(data=tmpdat, aes(x=date,y=smoothcasesR),colour="red",alpha=0.75) +
   xlab("Date") + ylab("Cases backdeduced from R")
+
+tibble(date=comdat$date,c=Predict$c,
+       smoothcasesR=dfR$smoothcasesR,
+       SmoothRlog=dfR$smoothRlog,
+       SmoothRito=dfR$smoothRito,
+       bylogR=dfR$bylogR,
+       MeanR=mean(dfR$bylogR) )->tmpdat
+ggplot(comdat,aes(x=date)) +
+  geom_point(data=tmpdat, aes(x=date,y=bylogR),colour="black",alpha=0.75) +
+  geom_line(data=tmpdat, aes(x=date,y=SmoothRlog),colour="blue",alpha=0.75) +
+  geom_line(data=tmpdat, aes(x=date,y=SmoothRito),colour="violet",alpha=0.75) +
+  geom_line(data=tmpdat, aes(x=date,y=MeanR),colour="green",alpha=0.75) +
+  geom_line(data=tmpdat, aes(x=date,y=smoothcasesR),colour="red",alpha=0.75) +
+  xlab("Date") + ylab("R")
 rm(tmpdat)
 
 # Load code to function to output to the web-ui interface
@@ -1560,11 +1607,16 @@ t0 <-  min(dfR$date)
 days <- as.integer(dfR$date - t0)
 
 # Labels are optional
-myCritRecov <- rowSums(CRITREC[2:20])
-myCritical <- rowSums(CRIT[2:20])
-myILI <- rowSums(ILI[2:20])
-myMild <- rowSums(MILD[2:20])
-mySARI <-  rowSums(ILI[2:20])
+myCritRecov <- as.integer(rowSums(CRITREC[2:20]))
+myCritical <- as.integer(rowSums(CRIT[2:20]))
+myILI <- as.integer(rowSums(ILI[2:20]))
+myMild <- as.integer(rowSums(MILD[2:20]))
+mySARI <-  as.integer(rowSums(ILI[2:20]))
+mynewCritRecov <- as.integer(rowSums(newCRITREC[2:20]))
+mynewCritical <- as.integer(rowSums(newCRIT[2:20]))
+mynewILI <- as.integer(rowSums(newILI[2:20]))
+mynewMild <- as.integer(rowSums(newMILD[2:20]))
+mynewSARI <-  as.integer(rowSums(newILI[2:20]))
 outputJSON(myt0 = t0,
            mydaysarray = days,
            myregion = region,
@@ -1579,13 +1631,13 @@ outputJSON(myt0 = t0,
            myILI = myILI,
            myMild = myMild,
            myR = dfR$piecewise,
-           mySARI = rowSums(SARI[2:20]),
-           mycumCritRecov = cumsum(myCritRecov),
-           mycumCritical = cumsum(myCritical),
-           mycumILI = cumsum(myILI),
-           mycumMild = cumsum(myMild),
-           mycumSARI = cumsum(mySARI),
-           myincDeath = rowSums(DEATH[2:20])
+           mySARI = as.integer(rowSums(SARI[2:20])),
+           mycumCritRecov = cumsum(mynewCritRecov),
+           mycumCritical = cumsum(mynewCritical),
+           mycumILI = cumsum(mynewILI),
+           mycumMild = cumsum(mynewMild),
+           mycumSARI = cumsum(mynewSARI),
+           myincDeath = as.integer(rowSums(DEATH[2:20]))
 )
 CrystalCast=TRUE
 if(CrystalCast){
@@ -1625,11 +1677,11 @@ if(medrxiv){
   logmean = 2.534
   logsd = 0.613
   lndist = dlnorm(1:28, logmean, logsd) #params from Hawryluk et al.
-  ggplot(data.frame(index = 1:28, prop = lndist)) +
-    geom_point(aes(x = index, y = prop)) +
-    labs(title = "Discretised Lognormal Distribution (Hawryluk)") +
-    xlab("Time to Death") +
-    ylab("Proportion of day zero cases")
+#  ggplot(data.frame(index = 1:28, prop = lndist)) +
+#    geom_point(aes(x = index, y = prop)) +
+#    labs(title = "Discretised Lognormal Distribution (Hawryluk)") +
+#    xlab("Time to Death") +
+#    ylab("Proportion of day zero cases")
   rm(logmean, logsd)
 
   #### AGE GROUPS - Gamma distribution ####
@@ -1637,11 +1689,12 @@ if(medrxiv){
   alpha = 4.447900991
   beta = 4.00188764
   gamdist = dgamma(1:28, shape = alpha, scale = beta) #params from Verity et al.
-  ggplot(data.frame(index = 1:28, prop = gamdist)) +
-    geom_point(aes(x = index, y = prop)) +
-    labs(title = "Discretised Gamma Distribution (Verity)") +
-    xlab("Time to Death") +
-    ylab("Proportion of day zero cases")
+
+#  ggplot(data.frame(index = 1:28, prop = gamdist)) +
+#    geom_point(aes(x = index, y = prop)) +
+#    labs(title = "Discretised Gamma Distribution (Verity)") +
+#    xlab("Time to Death") +
+#    ylab("Proportion of day zero cases")
   rm(alpha, beta)
 
   #Spread each age group's cases by the distribution
@@ -1671,17 +1724,17 @@ if(medrxiv){
     scotdat$gamcaseload[day] = sum(scotdat$allCases[(day-27):day] * rev(gamdist))
   }
   #  Spread Regional cases by the lognormal & gammadistribution
-  reglnpredict<-regdeaths
-  reggampredict<-regdeaths
+  reglnpredict<-regcases
+  reggampredict<-regcases
   for (area in 2:length(regcases)){
     for (day in 28:nrow(comdat)){
       reglnpredict[day,area] = sum(regcases[(day-27):day,area] * rev(lndist))
       reggampredict[day,area] = sum(regcases[(day-27):day,area] * rev(gamdist))}}
   rm(day,area)
 
-
+plot(reglnpredict$England)
   for (area in 2:length(regcases)){
-    lines(reglnpredict[2:279,area])}
+    lines(reglnpredict[2:365,area])}
   #Plots
   ggplot(logcases, aes(x = date)) +
     geom_line(aes(y = rowSums(logcases[,2:20])), na.rm = TRUE) +
@@ -1756,19 +1809,19 @@ if(medrxiv){
   #Get Autumn model fits
   if(interactive()){
     model = lm(filter(comdat, date %in% daterange)$allDeaths ~ filter(gampred, date %in% daterange)$allCasesPred)
-    summary(model)
+#    summary(model)
 
     model = lm(filter(comdat, date %in% daterange)$allDeaths ~ filter(logpred, date %in% daterange)$allCasesPred)
-    summary(model)
+#    summary(model)
 
     model = lm(filter(comdat, date %in% daterange)$allDeaths ~ filter(WSS, date %in% daterange)$values)
     summary(model)
 
     #Get overall model fits
-    model = lm(comdat$allDeaths[startdate:enddate] ~ gampred$allCasesPred[startdate:enddate])
+    model = lm(comdat$allDeaths[28:nrow(comdat)] ~ gampred$allCasesPred[28:nrow(comdat)])
     summary(model)
 
-    model = lm(comdat$allDeaths[startdate:enddate] ~ logpred$allCasesPred[startdate:enddate])
+    model = lm(comdat$allDeaths[28:nrow(comdat)] ~ logpred$allCasesPred[28:nrow(comdat)])
     summary(model)
 
     model = lm(filter(comdat, date %in% WSS$date)$allDeaths ~ WSS$values)
@@ -1783,7 +1836,7 @@ if(medrxiv){
     geom_line(data = gampred, aes(y = allCasesPred, color = "Gamma Model Predicted Deaths"), size = 1, na.rm = TRUE) +
     geom_line(data = logpred, aes(y = allCasesPred, color = "Lognormal Model Predicted Deaths"), size = 1, na.rm = TRUE) +
     geom_line(data = WSS, aes(y = values, color = "WSS Original"), size = 1, na.rm = TRUE) +
-    labs(title = "Predicted Deaths vs. Actual Deaths", color = "Legend") +
+    labs(title = "Predicted Deaths vs. Actual Deaths (no Vaccine)", color = "Legend") +
     ylab("Deaths") +
     xlab("Date") +
     scale_color_manual(values = c("Deaths (Government Figures)" = "Blue",
@@ -1867,7 +1920,7 @@ if(medrxiv){
 ###Assume that R and lethality are constants
 if(compartment){
   predtime = 28
-
+  RGUESS=R_England_BestGuess-1.0
   #  For loop over time, predCASE using R numbers
   predCASE<-ILI[lengthofdata,(1:20)]
   predCASE[1,(2:20)]<-CASE[lengthofdata,(2:20)] #  Growth rate by age group
@@ -1926,7 +1979,9 @@ if(compartment){
     #
     ##  Finally, estimate cases for tomorrow.  This uses an R value calculated above, but for CrystalCast purposes from
     ##  we can use MLP Rx.x as an input here
-    predCASE[(ipred+1),(2:20)]<-predCASE[ipred,(2:20)]*exp((R_England_BestGuess-1.0)/genTime)
+
+    RGUESS=RGUESS*0.9
+    predCASE[(ipred+1),(2:20)]<-predCASE[ipred,(2:20)]*exp(RGUESS/genTime)
     predCASE[ipred+1,1]<-startdate+iday
     ipred=ipred+1
     # End of compartment section
@@ -1936,18 +1991,27 @@ if(compartment){
 #CrystalCast output - use CC.R
 
 #Monitoring plots
+rbind(CASE,predCASE)->plotCASE
+plot(rowSums(plotCASE[11:20]),x=plotCASE$date)
+
 plot(HospitalData$newAdmissions)
 lines(rowSums(newSARI[2:20]),col="blue")
 
 plot(HospitalData$hospitalCases,x=HospitalData$date,ylab="Hospital Cases",xlab="Date")
 lines(rowSums(SARI[2:20]+CRIT[2:20]+CRITREC[2:20]),x=SARI$date,col='red')
-plot(rowSums(CASE[2:20]),x=deathdat$date,ylab="Cases",xlab="Date")
-lines(rowSums(newMILD[2:20]+newILI[2:20]),col="red",x=newMILD$date)
 
-plot(HospitalData$covidOccupiedMVBeds,x=deathdat$date,ylab="ICU Occupation",xlab="Date")
+plot(rowSums(newMILD[2:20]+newILI[2:20]),col="blue",x=newMILD$date,type="l",xlab="Date",ylab="Cases")
+points(rowSums(CASE[2:20]),x=deathdat$date)
+lines(rowSums(newMILD[2:10]+newILI[2:10]),col="green",x=newMILD$date,type="l",xlab="Date",ylab="Cases")
+lines(rowSums(newMILD[11:20]+newILI[11:20]),col="red",x=newMILD$date,type="l",xlab="Date",ylab="Cases")
+
+
+plot(HospitalData$covidOccupiedMVBeds,x=HospitalData$date,ylab="ICU Occupation",xlab="Date")
 lines(rowSums(CRIT[2:20]),col="blue",x=CRIT$date)
-plot(rowSums(deathdat[16:20]),x=deathdat$date,ylab="Deaths",xlab="Date")
-lines(rowSums(DEATH[16:20]),col="blue",x=DEATH$date)
+
+plot(rowSums(DEATH[2:20]),col="blue",x=DEATH$date, type="l",ylab="Deaths"
+     ,xlab="Date")#,xlim=c(startdate,(enddate+predtime)))
+points(rowSums(deathdat[2:20]),x=deathdat$date)
 
 # This needs to be the last routine called for the UI, by default it returns
 # success (0), if there is no success setStatus() should be called. By default
