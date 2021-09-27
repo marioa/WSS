@@ -7,7 +7,7 @@ CASE=scotage
   deathdat=scotdeath
   R_BestGuess=R_Scotland_BestGuess
   region="Scotland"
-  
+  Hospital<-scotHospital
   RawCFR=colSums(deathdat[2:20])/colSums(CASE[2:20])
   cdflength =50
   #  Time dependences of transitions - assumed age independent
@@ -95,14 +95,15 @@ CASE=scotage
   # Nobody changes age band.  Vectorize over distributions
   
   #Age dependent transition probabilities a->ILI b->SARI c->Death
-  # apow+bpow+cpow=1 gives a fit to death data, not accounting for variant & vaccination effect
-  # bpow/bfac conditions the hospital admissions by age Distribution is Approx U65=65-85=2 * 85+
-  apow = 0.15
-  bpow = 0.4
-  cpow = 1.0-apow-bpow
-  afac=1.0
-  bfac=1.1
-  cfac=1.0/afac/bfac
+#  Inherit these from main code
+# apow+bpow+cpow=1 gives a fit to death data, not accounting for variant & vaccination effect
+# bpow/bfac conditions the hospital admissions by age Distribution is Approx U65=65-85=2 * 85+
+# apow = 0.15
+#  bpow = 0.4
+#  cpow = 1.0-apow-bpow
+#  afac=1.0
+#  bfac=1.1
+#  cfac=1.0/afac/bfac
   for (iday in (2:lengthofdata)){
     pTtoI<-afac*RawCFR^apow*sqrt(comdat$lethality[iday])
     pItoS<-bfac*RawCFR^bpow*sqrt(comdat$lethality[iday])
@@ -189,15 +190,15 @@ CASE=scotage
   #  For loop over time, predCASE using R numbers
   predCASE<-ILI[lengthofdata,(1:20)]
   predCASE[1,(2:20)]<-CASE[lengthofdata,(2:20)] #  Growth rate by age group
-  predCASE[1,1]=enddate
+  predCASE[1,1]=CASE$date[nrow(CASE)]
   
-  ipred=1
+  ipred=1 #  Counter for date prediction
   startdate=CASE$date[nrow(CASE)]
   for (iday in ((lengthofdata+1):(lengthofdata+predtime))){
     
-    # R decays back to 1 with growth rate down 10% a day
+    # R decays back to 1 with growth rate down 15% a day
     # R is the same in all age groups
-    R_BestGuess=(R_BestGuess-1)*0.9+1.0
+    if(R_BestGuess > 1.0){R_BestGuess=(R_BestGuess-1)*0.95+1.0}
     #  Proportions become variant dependent.  ILI is case driven, so extra infectivity is automatic
     # from the data. ILI->SARI increases with variant.  CRIT is an NHS decision, not favoured for very old
     #  Need to increase CFR without exceeding 1.  Note inverse lethality isnt a simple % as CFR cant be >1
@@ -258,15 +259,18 @@ CASE=scotage
 rbind(CASE,predCASE)->plotCASE
 plot(rowSums(plotCASE[2:20]),x=plotCASE$date)
 #Monitoring plots
-plot(HospitalData$newAdmissions)
-lines(rowSums(newSARI[2:20]),col="blue")
-plot(HospitalData$hospitalCases,x=HospitalData$date,ylab="Hospital Cases",xlab="Date")
-lines(rowSums(SARI[2:20]+CRIT[2:20]+CRITREC[2:20]),x=SARI$date,col='red')
+
+plot(rowSums(newSARI[2:20]),col="blue",type='l')
+points(Hospital$newAdmissions)
+
+plot(Hospital$newAdmissions,x=Hospital$Date,ylab="Scottish Hospital Cases",xlab="Date",xlim=c(Hospital$Date[1],(Hospital$Date[350]+48)))
+lines(rowSums(newSARI[2:20]),x=SARI$date,col='red')
 plot(rowSums(CASE[2:20]),x=deathdat$date,ylab="Cases",xlab="Date")
 lines(rowSums(newMILD[2:20]+newILI[2:20]),col="red",x=newMILD$date)
 
-plot(HospitalData$covidOccupiedMVBeds,x=deathdat$date,ylab="ICU Occupation",xlab="Date")
-lines(rowSums(CRIT[2:20]),col="blue",x=CRIT$date)
+plot(Hospital$ICUAdmissions,x=deathdat$date,ylab="ICU Occupation",xlab="Date")
+lines(rowSums(newCRIT[2:20]),col="blue",x=CRIT$date)
 
-plot(rowSums(DEATH[2:20]),col="blue",x=DEATH$date)
-lines(rowSums(deathdat[2:20]),x=deathdat$date,ylab="Deaths",xlab="Date")
+plot(rowSums(DEATH[2:20]),col="blue",x=DEATH$date,type="l",
+      ylab="Deaths",xlab="Date")
+points(rowSums(deathdat[2:20]),x=deathdat$date,ylab="Deaths",xlab="Date")

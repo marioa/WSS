@@ -595,11 +595,12 @@ if(enddate == (Sys.Date()-1)){
 }
 
 
-# Add variant data to comdat
+# Add variant data to comdat  Kentfac tells us how much more virulent the variant is
+#  Numbers are fitted to death and hospitalistaion data
 comdat$Kent <- 0.0
 comdat$India <- 0.0
 Kentfac <- 0.6
-Indiafac <- 0.4
+Indiafac <- 0.9
 Kentdate <- as.integer(as.Date("2021/01/01")-startdate)
 
 # Approximate Kent by logistic rise around 2021/01/01  Same gen time, R+0.3 vs Wild  (0.3 is NOT lethality factor)
@@ -826,7 +827,7 @@ if(compartment){
   bpow = 0.4
   cpow = 1.0-apow-bpow
   afac=1.0
-  bfac=1.1
+  bfac=1.2
   cfac=1.0/afac/bfac
   for (iday in (2:lengthofdata)){
     pTtoI<-afac*RawCFR^apow*sqrt(comdat$lethality[iday])
@@ -949,6 +950,9 @@ rat <- regcases
 for(i in (2:nrow(regcases))    ){
   rat[i,2:ncol(regcases)] <- 1+log(regcases[i,2:ncol(regcases)]/regcases[(i-1),2:ncol(regcases)])*genTime
 }
+# Rest first row to 1, because there's no data
+# Fix R=1 not NaN or Inf when previous cases are zero
+# Its not really defined.  This generates a warning which we can ignore
 rat[1,2:ncol(regcases)]<-1.0
 rat[is.na(rat)] <- 1.0
 rat[rat==Inf] <- 1.0
@@ -1916,11 +1920,11 @@ plot(reglnpredict$England)
 }
 
 ################################################################
-###  Finally, Use all this to make predictions
+###  Finally, Use all this to make predictions for England (Scotland & Regions in separate compartment.R code)
 ###Assume that R and lethality are constants
 if(compartment){
   predtime = 28
-  RGUESS=R_England_BestGuess-1.0
+  R_BestGuess=R_England_BestGuess
   #  For loop over time, predCASE using R numbers
   predCASE<-ILI[lengthofdata,(1:20)]
   predCASE[1,(2:20)]<-CASE[lengthofdata,(2:20)] #  Growth rate by age group
@@ -1980,8 +1984,12 @@ if(compartment){
     ##  Finally, estimate cases for tomorrow.  This uses an R value calculated above, but for CrystalCast purposes from
     ##  we can use MLP Rx.x as an input here
 
-    RGUESS=RGUESS*0.9
-    predCASE[(ipred+1),(2:20)]<-predCASE[ipred,(2:20)]*exp(RGUESS/genTime)
+    # R decays back to 1 with growth rate down 5% a day
+    # R is the same in all age groups
+
+    if(R_BestGuess > 1.0) {R_BestGuess=(R_BestGuess-1)*0.95+1.0}
+   
+    predCASE[(ipred+1),(2:20)]<-predCASE[ipred,(2:20)]*exp((R_BestGuess-1)/genTime)
     predCASE[ipred+1,1]<-startdate+iday
     ipred=ipred+1
     # End of compartment section
@@ -1991,26 +1999,29 @@ if(compartment){
 #CrystalCast output - use CC.R
 
 #Monitoring plots
+startplot=startdate+3
+endplot=startdate+iday-3
 rbind(CASE,predCASE)->plotCASE
-plot(rowSums(plotCASE[11:20]),x=plotCASE$date)
+plot(rowSums(plotCASE[2:20]),x=plotCASE$date,xlim=c(startplot,endplot))
 
-plot(HospitalData$newAdmissions)
-lines(rowSums(newSARI[2:20]),col="blue")
+plot(HospitalData$newAdmissions,x=HospitalData$date, ylab="Hospital Admission",xlab="Date",xlim=c(startplot,endplot-11
+                                                                                                ))
+lines(rowSums(newSARI[2:20]),x=newSARI$date,col="blue")
 
-plot(HospitalData$hospitalCases,x=HospitalData$date,ylab="Hospital Cases",xlab="Date")
+plot(HospitalData$hospitalCases,x=HospitalData$date,ylab="Hospital Cases",xlab="Date",xlim=c((startplot),endplot))
 lines(rowSums(SARI[2:20]+CRIT[2:20]+CRITREC[2:20]),x=SARI$date,col='red')
 
-plot(rowSums(newMILD[2:20]+newILI[2:20]),col="blue",x=newMILD$date,type="l",xlab="Date",ylab="Cases")
+plot(rowSums(newMILD[2:20]+newILI[2:20]),xlim=c((startplot),endplot),col="blue",x=newMILD$date,type="l",xlab="Date",ylab="Cases")
 points(rowSums(CASE[2:20]),x=deathdat$date)
 lines(rowSums(newMILD[2:10]+newILI[2:10]),col="green",x=newMILD$date,type="l",xlab="Date",ylab="Cases")
 lines(rowSums(newMILD[11:20]+newILI[11:20]),col="red",x=newMILD$date,type="l",xlab="Date",ylab="Cases")
 
 
-plot(HospitalData$covidOccupiedMVBeds,x=HospitalData$date,ylab="ICU Occupation",xlab="Date")
+plot(HospitalData$covidOccupiedMVBeds,x=HospitalData$date,ylab="ICU Occupation",xlab="Date",xlim=c(startplot,endplot))
 lines(rowSums(CRIT[2:20]),col="blue",x=CRIT$date)
 
 plot(rowSums(DEATH[2:20]),col="blue",x=DEATH$date, type="l",ylab="Deaths"
-     ,xlab="Date")#,xlim=c(startdate,(enddate+predtime)))
+     ,xlab="Date",xlim=c(startplot,endplot-11))
 points(rowSums(deathdat[2:20]),x=deathdat$date)
 
 # This needs to be the last routine called for the UI, by default it returns
