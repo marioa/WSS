@@ -1,53 +1,15 @@
 # Try to ensure data encapsulation - do not assume any values for parameters
-# that not explicitly passed into the function. Also, do not assume any values
+# that not explicitly passed into the function. Also, do not assume that any values
 # that are set in the function will be available in the space from where the
 # function is called from. In order to pass back multiple data frames a list
 # will be used to output multiple values. Modifications to the data passed in
 # will only be made to copies of the data (R passes by value) and will not
 # propagate to the data passed in.
 
-# Call the function
-out <- Compartment(casedat, deathdat, covidsimAge, RawCFR, comdat)
-
-# Unpack the values returned
-DEATH <- out$DEATH
-RECOV <- out$RECOV
-MILD <- out$MILD
-oldMILD <- out$oldMILD
-newMILD <- out$newMILD
-ILI <- out$ILI
-oldILI <- out$oldILI
-newILI <- out$newILI
-SARI <- out$SARI
-oldSARI <-  out$oldSARI
-newSARI <- out$newSARI
-CRIT <- out$CRIT
-newCRIT <- out$newCRIT
-CRITREC <- out$CRITREC
-newCRITREC <- out$CRITREC
-CASE <- out$CASE
-pCtoD <- out$pCtoD
-pItoS <- out$pItoS
-pStoC <-  out$pStoC
-pStoD <- out$pStoD
-pTtoI <-  out$pTtoI
-MildToRecovery <-  out$MildToRecovery
-xday <- out$xday
-vacCFR <- out$vacCFR
-ILIToSARI <-  out$ILIToSARI
-ILIToRecovery <- out$ILIToRecovery
-SARIToCritical <- out$SARIToCritical
-SARIToDeath <- out$SARIToDeath
-SARIToRecovery <-  out$SARIToRecovery
-CriticalToDeath <- out$CriticalToDeath
-CriticalToCritRecov <- out$CriticalToCritRecov
-
-# Remove the list construct
-rm(out)
-
 # Function Definition - naming function variables to ensure it is not taking
 # values from the calling space
-Compartment <- function(cases, deaths, csimAge, rCFR, cdat){
+# Inherits vacdat from covid_trimmed
+Compartment <- function(cases,  csimAge, rCFR, cdat, startc, endc){
 
   # Create a list to output various data frames
   out <- list()
@@ -98,8 +60,8 @@ Compartment <- function(cases, deaths, csimAge, rCFR, cdat){
   lengthofdata <- nrow(CASE)
   lengthofspread <- length(ILIToRecovery)
 
-  #extend ILI longer than deaths to allow for predictions (eventually)
-  ILI <- deaths
+  #extend ILI longer than cases to allow for predictions (eventually)
+  ILI <- cases
   for (i in lengthofdata:(lengthofdata+lengthofspread) ){
     ILI[i,(2:ncol(ILI))] <-  0.0
     ILI[i,1] <- ILI$date[1]+i-1
@@ -131,7 +93,7 @@ Compartment <- function(cases, deaths, csimAge, rCFR, cdat){
 
   #  csimAge has no date row, so need to use iage-1
 
-  MILD[1,(2:ncol(MILD))] <- CASE[1,(2:ncol(CASE))]*csimAge$Prop_Mild_ByAge
+  MILD[1,(2:ncol(MILD))] <- CASE[1,(2:ncol(CASE))]
   ILI[1,(2:ncol(ILI))] <- CASE[1,(2:ncol(CASE))]*csimAge$Prop_ILI_ByAge
   SARI[1,(2:ncol(SARI))] <- CASE[1,(2:ncol(CASE))]*csimAge$Prop_SARI_ByAge
   CRIT[1,(2:ncol(CRIT))] <- CASE[1,(2:ncol(CASE))]*csimAge$Prop_Critical_ByAge
@@ -150,13 +112,16 @@ Compartment <- function(cases, deaths, csimAge, rCFR, cdat){
   afac <- 1.0
   bfac <- 1.2
   cfac <- 1.0/afac/bfac
-  for (iday in (2:lengthofdata)){
-    pTtoI <- afac*rCFR^apow*sqrt(cdat$lethality[iday])
-    pItoS <- bfac*rCFR^bpow*sqrt(cdat$lethality[iday])
-    pStoD <- cfac*rCFR^cpow*sqrt(cdat$lethality[iday])
+  for (iday in (startc:endc)){
+# Update current vaccine/variant lethality if available    
+    if(!is.na(cdat$lethality[iday])){
+    sfac <- sqrt(cdat$lethality[iday])}
+    pTtoI <- afac*rCFR^apow*sfac
+    pItoS <- bfac*rCFR^bpow*sfac
+    pStoD <- cfac*rCFR^cpow*sfac
     #  Entry to ventilation still from covidsim
     pStoC <-  csimAge$Prop_Critical_ByAge /
-      ( csimAge$Prop_Critical_ByAge + csimAge$Prop_SARI_ByAge )#*cdat$lethality[iday]
+      ( csimAge$Prop_Critical_ByAge + csimAge$Prop_SARI_ByAge )
     # All routes to death are the same, vary by age
     pCtoD <- pStoD
     pCRtoD <- pStoD
@@ -172,14 +137,7 @@ Compartment <- function(cases, deaths, csimAge, rCFR, cdat){
     # Note inverse lethality isnt a simple % as CFR cant be >1
     # Will have negative people  trouble if CFR>1
 
-
-    # Inter-compartment probability differs from covidsim's idea of totals ending their illness
-    # in that compartment  prior to RECOV/DEATH
-
-    #    pItoS= (Prop_Critical_ByAge+Prop_SARI_ByAge )*cdat$lethality[iday]  /
-    #        (  (Prop_Critical_ByAge+Prop_SARI_ByAge )*cdat$lethality[iday] +Prop_ILI_ByAge )
-
-    xday <- iday+length(SARIToCritical)-1
+  xday <- iday+length(SARIToCritical)-1
     agerange <- (2:ncol(ILI))
     ageminus <- agerange-1
 
@@ -190,7 +148,7 @@ Compartment <- function(cases, deaths, csimAge, rCFR, cdat){
     #  vectorize
     MtoR <- outer(as.numeric(newMILD[iday,agerange]),MildToRecovery,FUN="*")
     oldMILD[(iday:xday),agerange] <- oldMILD[(iday:xday),agerange]+MtoR
-    vacCFR <- 0.75 #Vaccine reduction in ILI-> SARI
+    vacCFR <- 0.85 #Vaccine reduction in ILI-> SARI
     for (iage in agerange){
       # All todays new MILDs will all leave to REC across distribution
       # multiple by vaccination and its CFR reduction
@@ -245,8 +203,10 @@ Compartment <- function(cases, deaths, csimAge, rCFR, cdat){
   out$oldSARI <- oldSARI
   out$newSARI <- newSARI
   out$CRIT <- CRIT
+  out$oldCRIT <- oldCRIT
   out$newCRIT <- newCRIT
   out$CRITREC <- CRITREC
+  out$oldCRITREC <- oldCRITREC
   out$newCRITREC <- newCRITREC
   out$CASE <-  CASE
   out$pCtoD <- pCtoD
@@ -264,7 +224,8 @@ Compartment <- function(cases, deaths, csimAge, rCFR, cdat){
   out$SARIToRecovery <-  SARIToRecovery
   out$CriticalToDeath <-  CriticalToDeath
   out$CriticalToCritRecov <-  CriticalToCritRecov
-
+  out$CritRecovToRecov <- CritRecovToRecov
   return(out)
 
 }# End of compartment function
+
