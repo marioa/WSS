@@ -534,7 +534,7 @@ coltypes <- cols(
   areaType = col_character(),
   date = col_date(format = "%Y-%m-%d"),
   age = col_character(),
-  cases = col_number(), 
+  cases = col_number(),
   rollingSum = col_number(),
   rollingRate = col_number()
 )
@@ -678,12 +678,13 @@ coltypes <-  cols(
 jnk <- read_csv(HospitalUrl, col_types = coltypes)
 Hospital<-list()
 Hospital$UK <- tibble()
-Hospital$UK  <-  jnk%>%
+Hospital$UK  <-  jnk %>%
                   select(date = date, saridat = hospitalCases, newsaridat = newAdmissions, critdat=covidOccupiedMVBeds) %>%
                   filter(date >= startdate & date <= enddate ) %>%
                   arrange(date)
-na.locf(Hospital$UK)
-
+Hospital$UK$saridat <- na.locf(Hospital$UK$saridat)
+Hospital$UK$newsaridat <- na.locf(Hospital$UK$newsaridat)
+Hospital$UK$critdat <- na.locf(Hospital$UK$critdat)
 
 # Add the Welsh and Northern Ireland cases data
 regcases$Wales <- walesdat$allCases
@@ -795,13 +796,14 @@ if(interactive()){
   # between 0 (opaque) to 1 (transparent)
   ggplot(comdat,aes(x=date)) +
     geom_point(aes(y=inputCases),alpha=0.5) +
-    geom_line(aes(y=allCases), color="green", size=1.5, alpha=0.5) +
-    geom_line(aes(y=fpCases),color="red", size=1.5, alpha=0.5) +
+    geom_line(aes(y=allCases), colour="green", size=1., alpha=0.5) +
+    geom_line(aes(y=fpCases),colour="red", size=1., alpha=0.5) +
+    geom_line(aes(y = regions), colour = "blue", size=1., alpha=0.5) +
     xlab("Dates") + ylab("Cases") +
     theme_bw()
 }
 ##  CFR going down gets entangled with vaccine effect.  Use pre-vaccination values
-##  With 12 day delay from WSS. 
+##  With 12 day delay from WSS.
 RawCFR=colSums(deathdat[12:211,2:20])/colSums(casedat[1:200,2:20])
 
 
@@ -812,7 +814,7 @@ RawCFR=colSums(deathdat[12:211,2:20])/colSums(casedat[1:200,2:20])
 
 #  Compartment model now done with a function.  Last two inputs are indices giving date range
 #  The compartments will not be correct until the cases have time to filter through all sections, which may be several months for, e.g oldCRITREC
-comp <- Compartment(casedat,  covidsimAge, RawCFR, comdat, 2,nrow(casedat))
+compEng <- Compartment(casedat,  covidsimAge, RawCFR, comdat, 2,nrow(casedat))
 
 
 # Do not unpack the values returned, access compartment quantities via comp$ list construct
@@ -826,7 +828,7 @@ if(interactive()){
   deathdat %>% rowwise()                               %>%
                mutate(totdeath = sum(c_across(2:20)))  %>%
                select(date,totdeath)                   %>%
-               left_join(comp$DEATH, by="date")        %>%
+               left_join(compEng$DEATH, by="date")        %>%
                mutate(totDEATH = sum(c_across(3:21)))  %>%
                select(date,totdeath, totDEATH)         %>%
                ggplot(aes(x = date, y = totdeath)) + geom_point(alpha = 0.25) +
@@ -834,7 +836,7 @@ if(interactive()){
                theme_bw() + ylab("Total Deaths") + xlab("Date")
 
   Hospital$UK %>% select(date, MVbeds = critdat) %>%
-                     left_join(comp$CRIT, by = "date")        %>%
+                     left_join(compEng$CRIT, by = "date")        %>%
                      rowwise()                                %>%
                      mutate(totCrit = sum(c_across(3:21)))    %>%
                      select(date, MVbeds, totCrit)            %>%
@@ -843,7 +845,7 @@ if(interactive()){
                      theme_bw() + ylab("Occupied MV beds") + xlab("Date")
 
   Hospital$UK %>% select(date, newsaridat)                       %>%
-                     left_join(comp$newSARI, by ="date")         %>%
+                     left_join(compEng$newSARI, by ="date")         %>%
                      rowwise()                                   %>%
                      mutate(totnewSARI = sum(c_across(3:21)))    %>%
                      select(date, newsaridat, totnewSARI)        %>%
@@ -853,15 +855,15 @@ if(interactive()){
                      theme_bw() + ylab("New Admissions") + xlab("Date")
 
   Hospital$UK %>% select(date, saridat)                           %>%
-                     left_join(comp$SARI, by = "date")            %>%
+                     left_join(compEng$SARI, by = "date")            %>%
                      rowwise()                                    %>%
                      mutate(totSARI = sum(c_across(3:21)))        %>%
                      select(date, saridat, totSARI)               %>%
-                     left_join(comp$CRIT, by = "date")            %>%
+                     left_join(compEng$CRIT, by = "date")            %>%
                      rowwise()                                    %>%
                      mutate(totSariCrit = sum(c_across(3:22)))    %>%
                      select(date, saridat, totSariCrit)           %>%
-                     left_join(comp$CRITREC, by = "date")         %>%
+                     left_join(compEng$CRITREC, by = "date")         %>%
                      rowwise()                                    %>%
                      mutate(totSariCritRec = sum(c_across(3:22))) %>%
                      ggplot(aes(x = date, y = saridat)) +
@@ -885,11 +887,11 @@ dfR <- data.frame(x=1.0:length(comdat$date),
 # rawR averages cases over previous genTime days - assumes genTime is the same as infectious period
 
 # Check if there are any zero cases in the data
-if(any(comp$CASE==0)){
-  for(name in names(comp$CASE)){
-    if(any(comp$CASE[name]==0)){
+if(any(compEng$CASE==0)){
+  for(name in names(compEng$CASE)){
+    if(any(compEng$CASE[name]==0)){
       warning("Zero values found for ",name," for the date(s) ",
-              paste(comp$CASE[["date"]][which(comp$CASE[name]==0)],collapse = ", "),".")
+              paste(compEng$CASE[["date"]][which(compEng$CASE[name]==0)],collapse = ", "),".")
     }
   }
 }
@@ -921,7 +923,7 @@ if(interactive()){
     geom_smooth(formula= y ~ x, method = "loess", span=0.3) +  guides(color = "none") +
     facet_wrap(vars(Region)) +
     theme(axis.text.x=element_text(angle=90,hjust=1)) +xlab("Date")
-  
+
   #  Plot UK nations and English regions
   rat[,c(1,2,3,4,5,6,7,8,9,10,11,12,13)]%>% filter(startplot < date & date < endplot) %>%
     pivot_longer(!date,names_to = "Region", values_to="R") %>%
@@ -929,7 +931,7 @@ if(interactive()){
     coord_cartesian(ylim=c(0.5,1.9))+ geom_smooth(formula= y ~ x, method = "loess", span=0.3) +
     guides(color = "none") + facet_wrap(vars(Region)) +
     theme(axis.text.x=element_text(angle=90,hjust=1)) +xlab("Date")
-  
+
   #  Plot Scottish regions
   rat[,c(1,11,14,15,16,17,18,19,20,21,22,23,24,25,26,27)]%>% filter(startplot < date & date < endplot) %>%
     pivot_longer(!date,names_to = "Region", values_to="R") %>%
@@ -1023,7 +1025,7 @@ rat$smoothNW <-smooth.spline(rat$`North West`,df=spdf,w=sqrt(regcases$`North Wes
 rat$smoothNEY <-smooth.spline(rat$NE_Yorks,df=spdf,w=sqrt(regcases$NE_Yorks))$y
 rat$smoothLondon <-smooth.spline(rat$London,df=spdf,w=sqrt(regcases$London))$y
 rat$smoothEE <-smooth.spline(rat$`East of England`,df=spdf,w=sqrt(regcases$`East of England`))$y
-rat$smoothMid <-smooth.spline(rat$Midlands,df=spdf,w=sqrt(regcases$Midlands))$y
+rat$smoothMD <-smooth.spline(rat$Midlands,df=spdf,w=sqrt(regcases$Midlands))$y
 rat$smoothSE <-smooth.spline(rat$`South East`,df=spdf,w=sqrt(regcases$`South East`))$y
 rat$smoothSW <-smooth.spline(rat$`South West`,df=spdf,w=sqrt(regcases$`South West`))$y
 rat$smoothWales <-smooth.spline(rat$Wales,df=spdf,w=sqrt(regcases$Wales))$y
@@ -1499,16 +1501,16 @@ t0 <-  min(dfR$date)
 days <- as.integer(dfR$date - t0)
 
 # Labels are optional
-myCritRecov <- as.integer(rowSums(comp$CRITREC[2:20]))
-myCritical <- as.integer(rowSums(comp$CRIT[2:20]))
-myILI <- as.integer(rowSums(comp$ILI[2:20]))
-myMild <- as.integer(rowSums(comp$MILD[2:20]))
-mySARI <-  as.integer(rowSums(comp$SARI[2:20]))
-mynewCritRecov <- as.integer(rowSums(comp$newCRITREC[2:20]))
-mynewCritical <- as.integer(rowSums(comp$newCRIT[2:20]))
-mynewILI <- as.integer(rowSums(comp$newILI[2:20]))
-mynewMild <- as.integer(rowSums(comp$newMILD[2:20]))
-mynewSARI <-  as.integer(rowSums(comp$newSARI[2:20]))
+myCritRecov <- as.integer(rowSums(compEng$CRITREC[2:20]))
+myCritical <- as.integer(rowSums(compEng$CRIT[2:20]))
+myILI <- as.integer(rowSums(compEng$ILI[2:20]))
+myMild <- as.integer(rowSums(compEng$MILD[2:20]))
+mySARI <-  as.integer(rowSums(compEng$SARI[2:20]))
+mynewCritRecov <- as.integer(rowSums(compEng$newCRITREC[2:20]))
+mynewCritical <- as.integer(rowSums(compEng$newCRIT[2:20]))
+mynewILI <- as.integer(rowSums(compEng$newILI[2:20]))
+mynewMild <- as.integer(rowSums(compEng$newMILD[2:20]))
+mynewSARI <-  as.integer(rowSums(compEng$newSARI[2:20]))
 outputJSON(myt0 = t0,
            mydaysarray = days,
            myregion = UI_region,
@@ -1523,26 +1525,18 @@ outputJSON(myt0 = t0,
            myILI = myILI,
            myMild = myMild,
            myR = dfR$piecewise,
-           mySARI = as.integer(rowSums(comp$SARI[2:20])),
+           mySARI = as.integer(rowSums(compEng$SARI[2:20])),
            mycumCritRecov = cumsum(mynewCritRecov),
            mycumCritical = cumsum(mynewCritical),
            mycumILI = cumsum(mynewILI),
            mycumMild = cumsum(mynewMild),
            mycumSARI = cumsum(mynewSARI),
-           myincDeath = as.integer(rowSums(comp$DEATH[2:20]))
+           myincDeath = as.integer(rowSums(compEng$DEATH[2:20]))
 )
-CrystalCast=TRUE
-if(CrystalCast){
-  "Edinburgh,WSS,Nowcast,Cases,v1"
-  date()
-  date()
-  "All,Scotland,R"
-  R_BestGuess$Scotland
-}
 
 #####  Figures and analysis for https://www.medrxiv.org/content/10.1101/2021.04.14.21255385v1
-# Date not encapuslated and may become broken because of hardcoded dates
-#Nothing should be returned or changed by this analysis
+# Date not encapsulated and may become broken because of hard coded dates
+# Nothing should be returned or changed by this analysis
 
 
 medrxiv<-FALSE
@@ -1556,53 +1550,44 @@ if(interactive()&medrxiv){medout<-MedrxivPaper()}
 predtime = 28
 region="England"
 
-compMTP<-Predictions(comp,R_BestGuess$England)
+predEng<-Predictions(compEng,R_BestGuess$England)
 
 #  Compartment predictions removed to Predictions.R
 #  Replicated the data because repeated calls to Predictions would increment comp
 
-#Monitoring plots
+# Monitoring plots
 
-#Ratios
-total_deaths=sum(deathdat[2:20])
-total_cases=sum(casedat[2:20])
-total_admissions=sum(Hospital$UK$newsaridat)
-total_crit=sum(Hospital$UK$critdat)
-total_time_death=nrow(deathdat)
-total_time_case=nrow(casedat)
-total_time=length(Hospital$UK$date)
-ratio <-list()
-ratio$death=total_deaths/sum(comp$DEATH[1:total_time_death,2:20])
-ratio$case=total_cases/sum(comp$CASE[1:total_time_case,2:20])
-ratio$hosp=total_admissions/sum(comp$newSARI[1:total_time,2:20])
-ratio$crit=total_crit/sum(comp$CRIT[1:total_time,2:20])
+#  crystal cast writing moved to Regional.R
+#CC_write(predEng,"England",population$England[1],R_BestGuess$England,R_Quant$England,rat$smoothEngland)
+#  Wales and NI awaiting age data wrangle
 
 if(interactive()){
 startplot=startdate+3
-endplot=startdate+nrow(compMTP$CASE)+predtime-3
-PREV<-comp$ILI[2:20]+comp$SARI[2:20]+comp$CRIT[2:20]+comp$MILD[2:20]
+endplot=startdate+nrow(predEng$CASE)+predtime-3
+PREV<-compEng$ILI[2:20]+compEng$SARI[2:20]+compEng$CRIT[2:20]+compEng$MILD[2:20]
 lines(rowSums(PREV))
-plot(rowSums(compMTP$CASE[2:20]),x=compMTP$CASE$date,xlim=c(startplot,endplot))
+plot(rowSums(predEng$CASE[2:20]),x=predEng$CASE$date,xlim=c(startplot,endplot))
 
 
 plot(Hospital$UK$newsaridat,x=Hospital$UK$date, ylab="Hospital Admission",xlab="Date",xlim=c(startplot,endplot-11                                                                                                ))
-lines(rowSums(comp$newSARI[2:20])*1.47,x=comp$newSARI$date,col="blue")
-
+lines(rowSums(compEng$newSARI[2:20]),x=compEng$newSARI$date,col="blue")
+lines(rowSums(predEng$newSARI[2:20]),x=compEng$newSARI$date,col="red")
 plot(Hospital$UK$saridat,x=Hospital$UK$date,ylab="Hospital Cases",xlab="Date",xlim=c((startplot),endplot))
-lines(rowSums(compMTP$SARI[2:20]+compMTP$CRIT[2:20]+compMTP$CRITREC[2:20]),x=compMTP$SARI$date,col='red')
+lines(rowSums(predEng$SARI[2:20]+predEng$CRIT[2:20]+predEng$CRITREC[2:20]),x=predEng$SARI$date,col='red')
 
-plot(rowSums(comp$newMILD[2:20]+comp$newILI[2:20]),xlim=c((startplot),endplot),col="blue",x=comp$newMILD$date,type="l",xlab="Date",ylab="Cases")
-points(rowSums(compMTP$CASE[2:20]),x=compMTP$CASE$date)
-lines(rowSums(comp$newMILD[2:10]+comp$newILI[2:10]),col="green",x=comp$newMILD$date,type="l",xlab="Date",ylab="Cases")
-lines(rowSums(comp$newMILD[11:20]+comp$newILI[11:20]),col="red",x=comp$newMILD$date,type="l",xlab="Date",ylab="Cases")
+plot(rowSums(compEng$newMILD[2:20]+compEng$newILI[2:20]),xlim=c((startplot),endplot),col="blue",x=compEng$newMILD$date,type="l",xlab="Date",ylab="Cases")
+points(rowSums(predEng$CASE[2:20]),x=predEng$CASE$date)
+lines(rowSums(compEng$newMILD[2:10]+compEng$newILI[2:10]),col="green",x=compEng$newMILD$date,type="l",xlab="Date",ylab="Cases")
+lines(rowSums(compEng$newMILD[11:20]+compEng$newILI[11:20]),col="red",x=compEng$newMILD$date,type="l",xlab="Date",ylab="Cases")
 
 plot(Hospital$UK$critdat,x=Hospital$UK$date,ylab="ICU Occupation",xlab="Date",xlim=c(startplot,endplot))
-lines(rowSums(comp$CRIT[2:20]),col="blue",x=comp$CRIT$date)
+lines(rowSums(compEng$CRIT[2:20]),col="blue",x=compEng$CRIT$date)
 
-plot(rowSums(compMTP$DEATH[2:20]),col="blue",x=compMTP$DEATH$date, type="l",ylab="Deaths"
+plot(rowSums(predEng$DEATH[2:20]),col="blue",x=predEng$DEATH$date, type="l",ylab="Deaths"
      ,xlab="Date",xlim=c(startplot,endplot-11))
 points(rowSums(deathdat[2:20]),x=deathdat$date)
 }
+
 # This needs to be the last routine called for the UI, by default it returns
 # success (0), if there is no success setStatus() should be called. By default
 # it will return -1 but you can set a value setStatus(1). Any non-zero value

@@ -11,7 +11,7 @@ library(lubridate)
 # Initiate variables
 group <- "Edinburgh"
 model <-  "WSS"
-scenario <- "NowCast"
+scenario <- "Nowcast"
 modeltype <- "Cases"
 version <- 0.1
 today <- today()
@@ -377,9 +377,9 @@ CCmid$"Quantile 0.75"=Quant[4]
 CCmid$"Quantile 0.95"=Quant[5]
 # Add the new row
 CC <- rbind(CC, CCmid)
+start_date=300
 
-
-for (d in 4:(length(smoothweightR$date)-3)){
+for (d in start_date:(length(smoothweightR$date)-3)){
   CCdate <-CCtmp
   CCdate$Geography="England"
   CCdate$Value = smoothweightR$y[d]
@@ -395,7 +395,7 @@ for (d in 4:(length(smoothweightR$date)-3)){
   CC <- rbind(CC, CCdate)
 }
 
-for (d in 4:(length(rat$date)-3)){
+for (d in start_date:(length(rat$date)-3)){
   CCdate$Geography="Scotland"
   CCdate$Value =rat$smoothScotland[d]
   CCdate$"Quantile 0.05"=min(rat$smoothScotland[(d-3):(d+3)])-0.2
@@ -409,7 +409,7 @@ for (d in 4:(length(rat$date)-3)){
   # Add the new row
   CC <- rbind(CC, CCdate)
 }
-for (d in 4:(length(rat$date)-3)){
+for (d in start_date:(length(rat$date)-3)){
   CCdate$Geography="North East"
   CCdate$Value = rat$smoothNEY[d]
   CCdate$"Quantile 0.05"=min(rat$smoothNEY[(d-3):(d+3)])-0.2
@@ -423,7 +423,7 @@ for (d in 4:(length(rat$date)-3)){
   # Add the new row
   CC <- rbind(CC, CCdate)
 }
-for (d in 4:(length(rat$date)-3)){
+for (d in start_date:(length(rat$date)-3)){
   CCdate$Geography="North West"
   CCdate$Value = rat$smoothNW[d]
   CCdate$"Quantile 0.05"=min(rat$smoothNW[(d-3):(d+3)])-0.2
@@ -437,7 +437,7 @@ for (d in 4:(length(rat$date)-3)){
   # Add the new row
   CC <- rbind(CC, CCdate)
 }
-for (d in 4:(length(rat$date)-3)){
+for (d in start_date:(length(rat$date)-3)){
   CCdate$Geography="East of England"
   CCdate$Value = rat$smoothEE[d]
   CCdate$"Quantile 0.05"=min(rat$smoothEE[(d-3):(d+3)])-0.2
@@ -451,7 +451,7 @@ for (d in 4:(length(rat$date)-3)){
   # Add the new row
   CC <- rbind(CC, CCdate)
 }
-for (d in 4:(length(rat$date)-3)){
+for (d in start_date:(length(rat$date)-3)){
   CCdate$Geography="South West"
   CCdate$Value = rat$smoothSW[d]
   CCdate$"Quantile 0.05"=min(rat$smoothSW[(d-3):(d+3)])-0.2
@@ -466,7 +466,7 @@ for (d in 4:(length(rat$date)-3)){
   CC <- rbind(CC, CCdate)
 }
 
-for (d in 4:(length(rat$date)-3)){
+for (d in start_date:(length(rat$date)-3)){
   CCdate$Geography="South East"
   CCdate$Value = rat$smoothSE[d]
   CCdate$"Quantile 0.05"=min(rat$smoothSE[(d-3):(d+3)])-0.2
@@ -480,7 +480,7 @@ for (d in 4:(length(rat$date)-3)){
   # Add the new row
   CC <- rbind(CC, CCdate)
 }
-for (d in 4:(length(rat$date)-3)){
+for (d in start_date:(length(rat$date)-3)){
   CCdate$Geography="London"
   CCdate$Value = rat$smoothLondon[d]
   CCdate$"Quantile 0.05"=min(rat$smoothLondon[(d-3):(d+3)])-0.2
@@ -494,21 +494,21 @@ for (d in 4:(length(rat$date)-3)){
   # Add the new row
   CC <- rbind(CC, CCdate)
 }
-for (d in 4:(length(rat$date)-3)){
+for (d in start_date:(length(rat$date)-3)){
   CCdate$Geography="Midlands"
-  CCdate$Value = rat$smoothMid[d]
-  CCdate$"Quantile 0.05"=min(rat$smoothMid[(d-3):(d+3)])-0.2
-  CCdate$"Quantile 0.25"=min(rat$smoothMid[(d-3):(d+3)])-0.1
-  CCdate$"Quantile 0.5"=rat$smoothMid[d]
-  CCdate$"Quantile 0.75"=max(rat$smoothMid[(d-3):(d+3)])+0.1
-  CCdate$"Quantile 0.95"=max(rat$smoothMid[(d-3):(d+3)])+0.2
+  CCdate$Value = rat$smoothMD[d]
+  CCdate$"Quantile 0.05"=min(rat$smoothMD[(d-3):(d+3)])-0.2
+  CCdate$"Quantile 0.25"=min(rat$smoothMD[(d-3):(d+3)])-0.1
+  CCdate$"Quantile 0.5"=rat$smoothMD[d]
+  CCdate$"Quantile 0.75"=max(rat$smoothMD[(d-3):(d+3)])+0.1
+  CCdate$"Quantile 0.95"=max(rat$smoothMD[(d-3):(d+3)])+0.2
   CCdate$"Day of Value" = day(rat$date[d])
   CCdate$"Month of Value" = month(rat$date[d])
   CCdate$"Year of Value" = year(rat$date[d])
   # Add the new row
   CC <- rbind(CC, CCdate)
 }
-for (d in 4:(length(rat$date)-3)){
+for (d in start_date:(length(rat$date)-3)){
   CCdate$Geography="Wales"
   CCdate$Value = rat$smoothWales [d]
   CCdate$"Quantile 0.05"=min(rat$smoothWales[(d-3):(d+3)])-0.2
@@ -522,7 +522,7 @@ for (d in 4:(length(rat$date)-3)){
   # Add the new row
   CC <- rbind(CC, CCdate)
 }
-for (d in 4:(length(rat$date)-3)){
+for (d in start_date:(length(rat$date)-3)){
   CCdate$Geography="Northern Ireland"
   CCdate$Value = rat$smoothNI[d]
   CCdate$"Quantile 0.05"=min(rat$smoothNI[(d-3):(d+3)])-0.2
@@ -536,67 +536,9 @@ for (d in 4:(length(rat$date)-3)){
   # Add the new row
   CC <- rbind(CC, CCdate)
 }
-# Write to excel
+# MTPs moved to CC_write Write to excel
 
 
-#  Medium term projections
-
-
-today <- today()
-ageband <-  "All"
-CCdate$Scenario="NowCast"
-CCdate$Geography=region
-CCdate$ValueType="hospital_inc"
-#  Log. Errors from fluctuations time 4 for methodological uncertainty
-#  adjust for recent discrepancy
-
-for (d in 8:(nrow(comp$newSARI)-22)){
-  if(comp$DEATH$date[d]<(today-reporting_delay)){ CCdate$Scenario="MTP"}
-  CCdate$Value = sum(comp$newSARI[d,2:20])
-  CCdate$"Quantile 0.05"=max(0,CCdate$Value*(1-12*sqrt(sum(comp$newSARI[(d-6):d,2:20])/7)/CCdate$Value))
-  CCdate$"Quantile 0.25"=max(0,CCdate$Value*(1-4*sqrt(sum(comp$newSARI[(d-6):d,2:20])/7)/CCdate$Value))
-  CCdate$"Quantile 0.5"=CCdate$Value
-  CCdate$"Quantile 0.75"=CCdate$Value*(1+4*sqrt(sum(comp$newSARI[(d-6):d,2:20])/7)/CCdate$Value)
-  CCdate$"Quantile 0.95"=CCdate$Value*(1+12*sqrt(sum(comp$newSARI[(d-7):d,2:20])/7)/CCdate$Value)
-  CCdate$"Day of Value" = day(comp$newSARI$date[d])
-  CCdate$"Month of Value" = month(comp$newSARI$date[d])
-  CCdate$"Year of Value" = year(comp$newSARI$date[d])
-  # Add the new row
-  CC <- rbind(CC, CCdate)
-}
-CCdate$ValueType="death_inc_line"
-CCdate$Scenario="NowCast"
-for (d in 8:(nrow(comp$DEATH)-22)){
-  if(comp$DEATH$date[d]<(today-reporting_delay)){ CCdate$Scenario="MTP"}
-  CCdate$Value = sum(comp$DEATH[d,2:20])
-  CCdate$"Quantile 0.05"=max(0,CCdate$Value*(1-12*sqrt(sum(comp$DEATH[(d-6):d,2:20])/7)/CCdate$Value))
-  CCdate$"Quantile 0.25"=max(0,CCdate$Value*(1-4*sqrt(sum(comp$DEATH[(d-6):d,2:20])/7)/CCdate$Value))
-  CCdate$"Quantile 0.5"=CCdate$Value
-  CCdate$"Quantile 0.75"=CCdate$Value*(1+4*sqrt(sum(comp$DEATH[(d-6):d,2:20])/7)/CCdate$Value)
-  CCdate$"Quantile 0.95"=CCdate$Value*(1+12*sqrt(sum(comp$DEATH[(d-7):d,2:20])/7)/CCdate$Value)
-  CCdate$"Day of Value" = day(comp$DEATH$date[d])
-  CCdate$"Month of Value" = month(comp$DEATH$date[d])
-  CCdate$"Year of Value" = year(comp$DEATH$date[d])
-  # Add the new row
-  CC <- rbind(CC, CCdate)
-}
-#  Check with ONS CCdate$ValueType="prevalence"
-CCdate$ValueType="incidence"
-CCdate$Scenario="NowCast"
-for (d in 8:(nrow(comp$CASE)-22)){
-  if(comp$DEATH$date[d]<(today-reporting_delay)){ CCdate$Scenario="MTP"}
-  CCdate$Value = sum(comp$CASE[d,2:20])
-  CCdate$"Quantile 0.05"=CCdate$Value*0.5
-  CCdate$"Quantile 0.25"=CCdate$Value*0.75
-  CCdate$"Quantile 0.5"=CCdate$Value
-  CCdate$"Quantile 0.75"=CCdate$Value*1.5
-  CCdate$"Quantile 0.95"=CCdate$Value*2
-  CCdate$"Day of Value" = day(comp$CASE$date[d])
-  CCdate$"Month of Value" = month(comp$CASE$date[d])
-  CCdate$"Year of Value" = year(comp$CASE$date[d])
-  # Add the new row
-  CC <- rbind(CC, CCdate)
-}
 
 #  Crystalcast format output  
 write.xlsx(CC, file = paste("Data/CCcompartment",today,".xlsx"), sheetName = "WSS", rowNames = FALSE, overwrite=TRUE)
